@@ -1,0 +1,19 @@
+[package]
+name = "packer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dialog = "0.3.0"
+winapi = { version = "0.3.8", features = ["consoleapi", "minwindef"] }
+windows-sys = { version = "0.45.0", features = ["Win32_System_Threading", "Win32_Foundation", "Win32_System_Kernel"] }
+arg_parse = { version = "0.3.0" }
+
+[lib]
+name = "unpacker"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "packer"
+path = "src/bin.rs"
