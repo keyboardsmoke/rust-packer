@@ -16,6 +16,5 @@ pub fn run(base: u64, peb: u64)
 {
     // Get DOS, NT etc.
     // Pass it.
-
     encryption::run(base, peb);
 }
