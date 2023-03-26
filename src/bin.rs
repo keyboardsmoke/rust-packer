@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::num::ParseIntError;
 
 use arg_parse::ArgParser;

@@ -41,11 +41,17 @@ fn startup_hijack(peb_ptr: u64) -> u32
 {
     // Run all modules...
     let base = unsafe { GetModuleHandleA(NULL as *const i8) as u64 };
-
-    unpacker::run(base, peb_ptr);
-
-    unsafe { 
-        let original_entry_point: extern "C" fn(u64) -> u32 = std::mem::transmute(OEP);
-        return original_entry_point(peb_ptr);
+    let res = unpacker::run(base, peb_ptr);
+    if res.is_err()
+    {
+        println!("Nope.");
+    } 
+    else 
+    {
+        unsafe { 
+            let original_entry_point: extern "C" fn(u64) -> u32 = std::mem::transmute(OEP);
+            return original_entry_point(peb_ptr);
+        }
     }
+    return 0;
 }
