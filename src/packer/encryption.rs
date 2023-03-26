@@ -30,8 +30,6 @@ pub fn pack(buffer: &mut Vec<u8>, dos: IMAGE_DOS_HEADER, nts: IMAGE_NT_HEADERS64
             .enumerate()
             .for_each(|(i, byte)| {
                 let kv = key[i.rem_euclid(key.len())];
-
-                // Problem... virtual protect lol
                 *byte = *byte ^ kv;
             });
         return false;
