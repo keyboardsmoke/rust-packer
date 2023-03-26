@@ -28,10 +28,6 @@ pub fn run(_base: u64, module: *mut u8, _peb: u64, dos: IMAGE_DOS_HEADER, nts: I
             return false;
         }
 
-        unsafe {
-            println!("Unpacking section {}", String::from_utf8_unchecked(cs.Name.to_vec()));
-        }
-
         let start = cs.VirtualAddress as usize;
         let end = start + cs.SizeOfRawData as usize;
         let code_base = unsafe { module.offset(cs.VirtualAddress as isize) };
@@ -42,7 +38,6 @@ pub fn run(_base: u64, module: *mut u8, _peb: u64, dos: IMAGE_DOS_HEADER, nts: I
             return false;
         }
 
-        // Everything works but this. Lol.
         for i in start .. end as usize {
             let key_index = i - start;
             let kv = key[key_index.rem_euclid(key.len())];

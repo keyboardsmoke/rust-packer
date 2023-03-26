@@ -44,7 +44,7 @@ fn startup_hijack(peb_ptr: u64) -> u32
     let res = unpacker::run(base, peb_ptr);
     if res.is_err()
     {
-        println!("Nope.");
+        panic!("Unable to decrypt target.");
     }
     else 
     {
@@ -53,5 +53,4 @@ fn startup_hijack(peb_ptr: u64) -> u32
             return original_entry_point(peb_ptr);
         }
     }
-    return 0;
 }
