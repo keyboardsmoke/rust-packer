@@ -1,21 +1,10 @@
 use std::num::ParseIntError;
 
-use arg_parse::ArgParser;
-use arg_parse::config;
+use clap::{Command, arg};
 
 pub mod packer;
 
-const LONG_OPTIONS: &'static [config::LongOption] = &[
-   config::LongOption{name: "bin", value_count: 1},
-   config::LongOption{name: "out", value_count: 1},
-   config::LongOption{name: "key", value_count: 1}
-];
-const SHORT_OPTIONS: &'static [config::ShortOption] = &[];
-const NON_OPTIONS: &'static [config::NonOption] = &[];
-const PARSER_ROOT_CMD: config::Config = config::Config::from(SHORT_OPTIONS, LONG_OPTIONS, NON_OPTIONS);
-static PARSER: ArgParser = ArgParser::from(PARSER_ROOT_CMD);
-
-fn make_key(key_string: String) -> Result<Vec<u8>, ParseIntError>
+fn make_key(key_string: String) -> anyhow::Result<Vec<u8>, ParseIntError>
 {
     println!("Making key from {}", key_string);
     (0..key_string.len())
@@ -24,52 +13,44 @@ fn make_key(key_string: String) -> Result<Vec<u8>, ParseIntError>
         .collect()
 }
 
-fn main() -> Result<(), std::io::Error>
+fn make_arguments(bin: &mut String, out: &mut String, key: &mut String) -> bool
 {
-    let root_cmd = PARSER.parse();
-    if root_cmd.is_err() {
-        println!("Failed to parse command line arguments.");
-        return Err(std::io::Error::from_raw_os_error(1));
+    let matches = Command::new("rust-packer")
+        .color(clap::ColorChoice::Always)
+        .arg(arg!(--bin <VALUE>).required(true))
+        .arg(arg!(--out <VALUE>).required(true))
+        .arg(arg!(--key <VALUE>).required(true))
+        .get_matches();
+
+    let bin_value = matches.get_one::<String>("bin");
+    if bin_value.is_none() {
+        return false;
     }
+    bin.clone_from(bin_value.unwrap());
+    let out_value = matches.get_one::<String>("out");
+    if out_value.is_none() {
+        return false;
+    }
+    out.clone_from(out_value.unwrap());
+    let key_value = matches.get_one::<String>("key");
+    if key_value.is_none() {
+        return false;
+    }
+    key.clone_from(key_value.unwrap());
+    return true;
+}
 
-    let root = root_cmd.unwrap();
-    let opts = root.long_options.to_vec();
-
+fn main() -> anyhow::Result<(), std::io::Error>
+{
     let mut opt_bin = String::new();
     let mut opt_out = String::new();
     let mut opt_key = String::new();
-
-    for opt in opts {
-        if opt.name == "bin" {
-            opt_bin = opt.values.first().unwrap().to_string();
-        } else if opt.name == "out" {
-            opt_out = opt.values.first().unwrap().to_string();
-        } else if opt.name == "key" {
-            opt_key = opt.values.first().unwrap().to_string();
-        } else {
-            // How?
-            println!("Unrecognized option passed to arguments {}", opt.name.to_string());
-            return Err(std::io::Error::from_raw_os_error(1));
-        }
-    }
-
-    if opt_bin.is_empty() {
-        println!("You must provide a --bin argument.");
+    if make_arguments(&mut opt_bin, &mut opt_out, &mut opt_key) == false {
+        println!("Failed to parse command line arguments.");
         return Err(std::io::Error::from_raw_os_error(1));
     }
-
-    if opt_out.is_empty() {
-        println!("You must provide a --out argument.");
-        return Err(std::io::Error::from_raw_os_error(1));
-    } 
-
-    if opt_key.is_empty() {
-        println!("You must provide a --key argument.");
-        return Err(std::io::Error::from_raw_os_error(1));
-    }
-
     let key = make_key(opt_key.clone());
-    if key.is_err() { 
+    if key.is_err() {
         println!("Unable to decode key string [{}].", opt_key);
         return Err(std::io::Error::from_raw_os_error(1));
     }
@@ -88,6 +69,5 @@ fn main() -> Result<(), std::io::Error>
     if packer::pack(opt_bin, opt_out, key_vec).is_ok() {
         return Ok(());
     }
-
     Err(std::io::Error::last_os_error())
 }

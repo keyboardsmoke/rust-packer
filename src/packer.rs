@@ -1,4 +1,4 @@
-#![warn(clippy::all)]
+//cl#![warn(clippy::all)]
 
 use std::{io::{Read, self}, io::Write};
 use std::fs;
@@ -17,7 +17,7 @@ fn get_file_buffer(filename: String, buffer: &mut Vec<u8>) -> io::Result<()>
     Ok(())
 }
 
-fn write_file_buffer(buffer: &Vec<u8>, output_filename: String) -> Result<(), String>
+fn write_file_buffer(buffer: &Vec<u8>, output_filename: String) -> anyhow::Result<(), String>
 {
     let f = fs::File::options().read(true).write(true).create(true).open(output_filename);
     if f.is_err() {
@@ -30,7 +30,7 @@ fn write_file_buffer(buffer: &Vec<u8>, output_filename: String) -> Result<(), St
     Ok(())
 }
 
-pub fn pack(filename: String, output_filename: String, _key: Vec<u8>) -> Result<(), String>
+pub fn pack(filename: String, output_filename: String, _key: Vec<u8>) -> anyhow::Result<(), String>
 {
     let mut buffer = Vec::new();
     get_file_buffer(filename, &mut buffer).or(Err("Unable to open file for reading.".to_string()))?;

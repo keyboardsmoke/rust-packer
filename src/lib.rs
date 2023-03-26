@@ -45,7 +45,7 @@ fn startup_hijack(peb_ptr: u64) -> u32
     if res.is_err()
     {
         println!("Nope.");
-    } 
+    }
     else 
     {
         unsafe { 

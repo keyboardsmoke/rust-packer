@@ -1,7 +1,8 @@
 #[allow(unused)]
 pub fn cast_offset_from_mod<T>(module: *mut u8, offset: usize) -> T
 {
-    let r: T = unsafe { std::ptr::read(module as *const _) };
+    let a = unsafe { module.offset(offset as isize) };
+    let r: T = unsafe { std::ptr::read(a as *const _) };
     return r;
 }
 
