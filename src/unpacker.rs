@@ -1,4 +1,4 @@
-use winapi::um::winnt::{IMAGE_NT_HEADERS64, IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_NT_SIGNATURE};
+use exe::PE;
 
 mod encryption;
 
@@ -10,31 +10,27 @@ pub fn initialize()
     encryption::initialize();
 }
 
-pub fn run(base: u64, peb: u64) -> anyhow::Result<(), String>
+pub fn run(base: u64, peb: u64) -> anyhow::Result<(), anyhow::Error>
 {
     println!("unpacker::run(0x{:X}, 0x{:X})", base, peb);
 
-    let module = unsafe { std::mem::transmute::<u64, *mut u8>(base) };
+    let pe = unsafe { exe::pe::PtrPE::from_memory(std::mem::transmute::<u64, *mut u8>(base)) }?;
+    let dos = pe.get_valid_dos_header()?;
 
-    let dos: IMAGE_DOS_HEADER = mem::cast_offset_from_mod::<IMAGE_DOS_HEADER>(module, 0);
-    
-    if dos.e_magic.ne(&IMAGE_DOS_SIGNATURE) {
+    if dos.e_magic.ne(&exe::DOS_SIGNATURE) {
         println!("Invalid DOS signature. {}", dos.e_magic);
-        return Err("Invalid DOS signature.".to_string());
+        return Err(anyhow::Error::msg("Invalid DOS signature."));
     }
 
-    println!("NT offset 0x{:X}", dos.e_lfanew);
+    let nts = pe.get_nt_headers_64()?;
 
-    let ntstart = dos.e_lfanew as usize;
-    let nts: IMAGE_NT_HEADERS64 = mem::cast_offset_from_mod::<IMAGE_NT_HEADERS64>(module, ntstart);
-
-    if nts.Signature.ne(&IMAGE_NT_SIGNATURE) {
-        println!("Invalid NT Signature. 0x{:X}", nts.Signature);
-        return Err("Invalid NT signature.".to_string());
+    if nts.signature.ne(&exe::NT_SIGNATURE) {
+        println!("Invalid NT Signature. 0x{:X}", nts.signature);
+        return Err(anyhow::Error::msg("Invalid NT signature."));
     }
 
     // Pass it.
-    encryption::run(base, module, peb, dos, nts)?;
+    encryption::run(base, pe.clone(), peb, dos, nts)?;
     
     Ok(())
 }

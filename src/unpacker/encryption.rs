@@ -1,4 +1,6 @@
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, IMAGE_SCN_MEM_EXECUTE};
+use std::borrow::BorrowMut;
+
+use exe::{ImageDOSHeader, ImageNTHeaders64};
 
 #[path = "../shared/mem.rs"]
 mod mem;
@@ -11,49 +13,35 @@ pub fn initialize()
     //
 }
 
-pub fn run(_base: u64, module: *mut u8, _peb: u64, dos: IMAGE_DOS_HEADER, nts: IMAGE_NT_HEADERS64) -> anyhow::Result<(), String>
+pub fn run(_base: u64, mut pe: exe::pe::PtrPE, _peb: u64, dos: &ImageDOSHeader, nts: &ImageNTHeaders64) -> anyhow::Result<(), anyhow::Error>
 {
     // Static key for now.
     let key: [u8; 3] = [0x50, 0xBE, 0x17];
     println!("Warning: Using static development key.");
 
-    section::foreach_section_module(module, dos, nts, |cs| {
-        let good = cs.Characteristics & IMAGE_SCN_MEM_EXECUTE;
-        if good != IMAGE_SCN_MEM_EXECUTE {
+    section::foreach_section_module(pe.borrow_mut(), *dos, *nts, |ptr, sec| {
+        let s = sec.first().unwrap();
+
+        let good = s.characteristics.bits() & exe::headers::SectionCharacteristics::MEM_EXECUTE.bits();
+        if good != exe::headers::SectionCharacteristics::MEM_EXECUTE.bits() {
             return false;
         }
 
-        // Keep going, though.
-        if cs.SizeOfRawData == 0 {
+        if s.size_of_raw_data == 0 {
             return false;
         }
-
-        let start = cs.VirtualAddress as usize;
-        let end = start + cs.SizeOfRawData as usize;
-        let code_base = unsafe { module.offset(cs.VirtualAddress as isize) };
-
-        let qs = unsafe { region::protect(code_base, cs.SizeOfRawData as usize, region::Protection::READ_WRITE_EXECUTE) };
-        if qs.is_err() {
-            println!("Unable to protect memory at offset 0x{:X}", cs.VirtualAddress);
-            return false;
-        }
+    
+        let start: usize = s.pointer_to_raw_data.into();
+        let end = start + s.size_of_raw_data as usize;
 
         for i in start .. end as usize {
             let key_index = i - start;
             let kv = key[key_index.rem_euclid(key.len())];
             unsafe {
-                let base: *mut u8 = module.add(i);
+                let base: *mut u8 = ptr.add(i);
                 *base = *base ^ kv;
             };
         }
-
-        // Set it back to normal
-        let fr = unsafe { region::protect(code_base, cs.SizeOfRawData as usize, region::Protection::READ_EXECUTE) };
-        if fr.is_err() {
-            println!("Unable to reset memory protection at offset 0x{:X}", cs.VirtualAddress);
-            return false;
-        }
-
         return false;
     });
     Ok(())

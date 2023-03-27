@@ -1,61 +1,71 @@
 //cl#![warn(clippy::all)]
 
-use std::{io::{Read, self}, io::Write};
+use std::{io::Read, io::Write};
 use std::fs;
-
-use winapi::um::winnt::{IMAGE_DOS_HEADER, IMAGE_DOS_SIGNATURE, IMAGE_NT_HEADERS64, IMAGE_NT_SIGNATURE};
-
+use exe::{PE, Buffer};
 mod encryption;
 
 #[path = "shared/mem.rs"]
 mod mem;
 
-fn get_file_buffer(filename: String, buffer: &mut Vec<u8>) -> io::Result<()>
+fn get_file_buffer(filename: String, buffer: &mut Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
-    let mut f = fs::File::open(filename)?;
+    let mut f = fs::File::options().read(true).write(false).create(false).create_new(false).open(filename)?;
     f.read_to_end(buffer)?;
     Ok(())
 }
 
-fn write_file_buffer(buffer: &Vec<u8>, output_filename: String) -> anyhow::Result<(), String>
+fn write_file_buffer(buffer: &Vec<u8>, output_filename: String) -> anyhow::Result<(), anyhow::Error>
 {
-    let f = fs::File::options().read(true).write(true).create(true).open(output_filename);
-    if f.is_err() {
-        return Err("Unable to open file.".to_string());
-    }
-    let mut file = f.unwrap();
-    if file.write_all(&buffer).is_err() {
-        return Err("Unable to write file.".to_string());
-    }
+    let mut f = fs::File::options().write(true).create(true).open(output_filename)?;
+    f.write_all(&buffer)?;
     Ok(())
 }
 
-pub fn pack(filename: String, output_filename: String, _key: Vec<u8>) -> anyhow::Result<(), String>
+pub fn pack(filename: String, output_filename: String, key: Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
     let mut buffer = Vec::new();
-    get_file_buffer(filename, &mut buffer).or(Err("Unable to open file for reading.".to_string()))?;
+    get_file_buffer(filename, &mut buffer)?;
     
     // If i want to use data 'in place'
     // let (head, body, tail) = unsafe { buffer.align_to::<IMAGE_DOS_HEADER>() };
+    let mut pe = exe::pe::VecPE::from_data(exe::pe::PEType::Disk, buffer);
 
-    let dos: IMAGE_DOS_HEADER = mem::cast_offset_from_vec::<IMAGE_DOS_HEADER>(&buffer, 0);
-    
-    if dos.e_magic.ne(&IMAGE_DOS_SIGNATURE) {
-        return Err("Invalid DOS signature.".to_string());
+    let dos = pe.get_valid_dos_header();
+    if dos.is_err() {
+        return Err(anyhow::Error::msg("Invalid DOS header."));
     }
 
-    let ntstart = dos.e_lfanew as usize;
-    let nts: IMAGE_NT_HEADERS64 = mem::cast_offset_from_vec::<IMAGE_NT_HEADERS64>(&buffer, ntstart);
+    let dos_hdr = dos.unwrap().clone();
+    
+    if dos_hdr.e_magic.ne(&exe::DOS_SIGNATURE) {
+        return Err(anyhow::Error::msg("Invalid DOS signature."));
+    }
 
-    if nts.Signature.ne(&IMAGE_NT_SIGNATURE) {
-        return Err("Invalid NT signature.".to_string());
+    let nts = pe.get_valid_mut_nt_headers_64();
+    if nts.is_err() {
+        return Err(anyhow::Error::msg("Invalid NT header."));
+    }
+
+    // We don't need mutable.
+    let nts_hdr = nts.unwrap().clone();
+
+    if nts_hdr.signature.ne(&exe::NT_SIGNATURE) {
+        return Err(anyhow::Error::msg("Invalid NT signature."));
     }
 
     // Run steps
-    encryption::pack(&mut buffer, dos, nts)?;
+    encryption::pack(pe.clone(), dos_hdr, nts_hdr, key)?;
+
+    // Add metadata
+    // let mut newHdr: ImageSectionHeader;
+    // newHdr.set_name(Some(".pack"));
+    // pe.append_section(section)
+
+    let writable = pe.get_mut_buffer();
 
     // Print and write
     println!("Successfully ran all packer steps.");
-    write_file_buffer(&buffer, output_filename)?;
+    write_file_buffer(&writable.to_vec(), output_filename)?;
     Ok(())
 }

@@ -1,6 +1,6 @@
-use std::num::ParseIntError;
+use std::{num::ParseIntError};
 
-use clap::{Command, arg};
+use clap::{Command, arg, ArgMatches};
 
 pub mod packer;
 
@@ -13,7 +13,18 @@ fn make_key(key_string: String) -> anyhow::Result<Vec<u8>, ParseIntError>
         .collect()
 }
 
-fn make_arguments(bin: &mut String, out: &mut String, key: &mut String) -> bool
+fn get_argument(matches: ArgMatches, name: &str) -> anyhow::Result<String, std::io::Error>
+{
+    let res = matches.get_one::<String>(name);
+    if res.is_none() {
+        println!("Unable to find required argument \"{}\", exiting...", name);
+        return Err(std::io::Error::from_raw_os_error(1));
+    }
+
+    Ok(res.unwrap().to_owned())
+}
+
+fn main() -> anyhow::Result<(), std::io::Error>
 {
     let matches = Command::new("rust-packer")
         .color(clap::ColorChoice::Always)
@@ -22,40 +33,25 @@ fn make_arguments(bin: &mut String, out: &mut String, key: &mut String) -> bool
         .arg(arg!(--key <VALUE>).required(true))
         .get_matches();
 
-    let bin_value = matches.get_one::<String>("bin");
-    if bin_value.is_none() {
-        return false;
-    }
-    bin.clone_from(bin_value.unwrap());
-    let out_value = matches.get_one::<String>("out");
-    if out_value.is_none() {
-        return false;
-    }
-    out.clone_from(out_value.unwrap());
-    let key_value = matches.get_one::<String>("key");
-    if key_value.is_none() {
-        return false;
-    }
-    key.clone_from(key_value.unwrap());
-    return true;
-}
+    let opt_bin = get_argument(matches.clone(), "bin")?;
+    let opt_out = get_argument(matches.clone(), "out")?;
+    let opt_key = get_argument(matches.clone(), "key")?;
 
-fn main() -> anyhow::Result<(), std::io::Error>
-{
-    let mut opt_bin = String::new();
-    let mut opt_out = String::new();
-    let mut opt_key = String::new();
-    if make_arguments(&mut opt_bin, &mut opt_out, &mut opt_key) == false {
-        println!("Failed to parse command line arguments.");
-        return Err(std::io::Error::from_raw_os_error(1));
-    }
-    let key = make_key(opt_key.clone());
-    if key.is_err() {
-        println!("Unable to decode key string [{}].", opt_key);
-        return Err(std::io::Error::from_raw_os_error(1));
-    }
+    println!("Input binary [{}]", opt_bin);
+    println!("Output binary [{}]", opt_out);
 
-    let key_vec = key.unwrap();
+    let key_vec = if opt_key.is_empty() {
+        println!("Warning: Using static development key.");
+        let static_key: [u8; 3] = [0x50, 0xBE, 0x17];
+        static_key.to_vec()
+    } else {
+        let key = make_key(opt_key.clone());
+        if key.is_err() {
+            println!("Unable to decode key string [{}].", opt_key);
+            return Err(std::io::Error::from_raw_os_error(1));
+        }
+        key.unwrap()
+    };
 
     print!("Key bytes [");
     key_vec

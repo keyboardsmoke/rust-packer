@@ -1,4 +1,6 @@
-use winapi::{um::winnt::{IMAGE_DOS_HEADER, IMAGE_NT_HEADERS64, IMAGE_SCN_MEM_EXECUTE}};
+use std::{borrow::BorrowMut};
+
+use exe::{ImageDOSHeader, ImageNTHeaders64};
 
 #[path = "../shared/mem.rs"]
 mod mem;
@@ -6,32 +8,32 @@ mod mem;
 #[path = "../shared/section.rs"]
 mod section;
 
-pub fn pack(buffer: &mut Vec<u8>, dos: IMAGE_DOS_HEADER, nts: IMAGE_NT_HEADERS64) -> anyhow::Result<(), String>
+pub fn pack(mut pe: exe::pe::VecPE, dos: ImageDOSHeader, nts: ImageNTHeaders64, key: Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
-    // Static key for now.
-    let key: [u8; 3] = [0x50, 0xBE, 0x17];
-    println!("Warning: Using static development key.");
+    section::foreach_section_buffer(pe.borrow_mut(), dos, nts, |vpe, sec| {
 
-    section::foreach_section_buffer(buffer, dos, nts, |buf, sec| {
-        let good = sec.Characteristics & IMAGE_SCN_MEM_EXECUTE;
-        if good != IMAGE_SCN_MEM_EXECUTE {
+        let s = sec.first().unwrap();
+
+        let good = s.characteristics.bits() & exe::headers::SectionCharacteristics::MEM_EXECUTE.bits();
+        if good != exe::headers::SectionCharacteristics::MEM_EXECUTE.bits() {
             return false;
         }
 
-        if sec.SizeOfRawData == 0 {
+        if s.size_of_raw_data == 0 {
             return false;
         }
     
-        let start = sec.PointerToRawData as usize;
-        let end = start + sec.SizeOfRawData as usize;
-    
-        buf[start .. end]
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, byte)| {
-                let kv = key[i.rem_euclid(key.len())];
-                *byte = *byte ^ kv;
-            });
+        let start: usize = s.pointer_to_raw_data.into();
+        let end = start + s.size_of_raw_data as usize;
+
+        for i in start .. end as usize {
+            let key_index = i - start;
+            let kv = key[key_index.rem_euclid(key.len())];
+            unsafe {
+                let base: *mut u8 = vpe.add(i);
+                *base = *base ^ kv;
+            };
+        }
         return false;
     });
     Ok(())
