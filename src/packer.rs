@@ -1,5 +1,6 @@
 //cl#![warn(clippy::all)]
 
+use std::path::PathBuf;
 use std::{io::Read, io::Write};
 use std::fs;
 use exe::{PE, Buffer};
@@ -8,21 +9,21 @@ mod encryption;
 #[path = "shared/mem.rs"]
 mod mem;
 
-fn get_file_buffer(filename: String, buffer: &mut Vec<u8>) -> anyhow::Result<(), anyhow::Error>
+fn get_file_buffer(filename: PathBuf, buffer: &mut Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
     let mut f = fs::File::options().read(true).write(false).create(false).create_new(false).open(filename)?;
     f.read_to_end(buffer)?;
     Ok(())
 }
 
-fn write_file_buffer(buffer: &Vec<u8>, output_filename: String) -> anyhow::Result<(), anyhow::Error>
+fn write_file_buffer(buffer: &Vec<u8>, output_filename: PathBuf) -> anyhow::Result<(), anyhow::Error>
 {
     let mut f = fs::File::options().write(true).create(true).open(output_filename)?;
     f.write_all(&buffer)?;
     Ok(())
 }
 
-pub fn pack(filename: String, output_filename: String, key: Vec<u8>) -> anyhow::Result<(), anyhow::Error>
+pub fn pack(filename: PathBuf, output_filename: PathBuf, key: Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
     let mut buffer = Vec::new();
     get_file_buffer(filename, &mut buffer)?;

@@ -1,8 +1,22 @@
-use std::{num::ParseIntError};
-
-use clap::{Command, arg, ArgMatches};
+use std::{num::ParseIntError, path::PathBuf};
+use clap::Parser;
 
 pub mod packer;
+
+
+#[derive(Debug, Clone, Parser)]
+#[command(name="Rust binary packer", author="Andrew Artz", version="1.0", about="Rust binary packer", long_about=None)]
+struct CliOptions
+{
+    #[clap(short, long)]
+    bin: PathBuf,
+
+    #[clap(short, long)]
+    out: PathBuf,
+
+    #[clap(short, long)]
+    key: Option<PathBuf>
+}
 
 fn make_key(key_string: String) -> anyhow::Result<Vec<u8>, ParseIntError>
 {
@@ -13,38 +27,19 @@ fn make_key(key_string: String) -> anyhow::Result<Vec<u8>, ParseIntError>
         .collect()
 }
 
-fn get_argument(matches: ArgMatches, name: &str) -> anyhow::Result<String, std::io::Error>
-{
-    let res = matches.get_one::<String>(name);
-    if res.is_none() {
-        println!("Unable to find required argument \"{}\", exiting...", name);
-        return Err(std::io::Error::from_raw_os_error(1));
-    }
-
-    Ok(res.unwrap().to_owned())
-}
-
 fn main() -> anyhow::Result<(), std::io::Error>
 {
-    let matches = Command::new("rust-packer")
-        .color(clap::ColorChoice::Always)
-        .arg(arg!(--bin <VALUE>).required(true))
-        .arg(arg!(--out <VALUE>).required(true))
-        .arg(arg!(--key <VALUE>).required(true))
-        .get_matches();
+    let opts = CliOptions::parse();
 
-    let opt_bin = get_argument(matches.clone(), "bin")?;
-    let opt_out = get_argument(matches.clone(), "out")?;
-    let opt_key = get_argument(matches.clone(), "key")?;
+    println!("Input binary [{}]", opts.bin.to_str().unwrap());
+    println!("Output binary [{}]", opts.out.to_str().unwrap());
 
-    println!("Input binary [{}]", opt_bin);
-    println!("Output binary [{}]", opt_out);
-
-    let key_vec = if opt_key.is_empty() {
+    let key_vec = if opts.key.is_none() {
         println!("Warning: Using static development key.");
         let static_key: [u8; 3] = [0x50, 0xBE, 0x17];
         static_key.to_vec()
     } else {
+        let opt_key = opts.key.unwrap().to_str().unwrap().to_string();
         let key = make_key(opt_key.clone());
         if key.is_err() {
             println!("Unable to decode key string [{}].", opt_key);
@@ -62,7 +57,7 @@ fn main() -> anyhow::Result<(), std::io::Error>
         });
     println!("]");
 
-    if packer::pack(opt_bin, opt_out, key_vec).is_ok() {
+    if packer::pack(opts.bin, opts.out, key_vec).is_ok() {
         return Ok(());
     }
     Err(std::io::Error::last_os_error())
