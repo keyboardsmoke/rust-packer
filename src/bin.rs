@@ -15,7 +15,7 @@ struct CliOptions
     out: PathBuf,
 
     #[clap(short, long)]
-    key: Option<PathBuf>
+    key: Option<String>
 }
 
 fn make_key(key_string: String) -> anyhow::Result<Vec<u8>, ParseIntError>
@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<(), std::io::Error>
         let static_key: [u8; 3] = [0x50, 0xBE, 0x17];
         static_key.to_vec()
     } else {
-        let opt_key = opts.key.unwrap().to_str().unwrap().to_string();
+        let opt_key = opts.key.unwrap();
         let key = make_key(opt_key.clone());
         if key.is_err() {
             println!("Unable to decode key string [{}].", opt_key);
