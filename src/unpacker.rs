@@ -1,5 +1,3 @@
-use exe::PE;
-
 mod encryption;
 
 #[path = "shared/mem.rs"]
@@ -14,23 +12,15 @@ pub fn run(base: u64, peb: u64) -> anyhow::Result<(), anyhow::Error>
 {
     println!("unpacker::run(0x{:X}, 0x{:X})", base, peb);
 
-    let pe = unsafe { exe::pe::PtrPE::from_memory(std::mem::transmute::<u64, *mut u8>(base)) }?;
-    let dos = pe.get_valid_dos_header()?;
-
-    if dos.e_magic.ne(&exe::DOS_SIGNATURE) {
-        println!("Invalid DOS signature. {}", dos.e_magic);
-        return Err(anyhow::Error::msg("Invalid DOS signature."));
+    let per = unsafe { exe::pe::PtrPE::from_memory(std::mem::transmute::<u64, *mut u8>(base)) };
+    if per.is_err() {
+        return Err(anyhow::Error::msg("Unable to open memory."));
     }
 
-    let nts = pe.get_nt_headers_64()?;
-
-    if nts.signature.ne(&exe::NT_SIGNATURE) {
-        println!("Invalid NT Signature. 0x{:X}", nts.signature);
-        return Err(anyhow::Error::msg("Invalid NT signature."));
-    }
+    let mut pe = per.ok().ok_or(anyhow::Error::msg("Unable to open memory."))?;
 
     // Pass it.
-    encryption::run(base, pe.clone(), peb, dos, nts)?;
+    encryption::run(base, &mut pe, peb)?;
     
     Ok(())
 }

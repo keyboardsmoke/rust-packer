@@ -34,9 +34,9 @@ fn main() -> anyhow::Result<(), std::io::Error>
     println!("Input binary [{}]", opts.bin.to_str().unwrap());
     println!("Output binary [{}]", opts.out.to_str().unwrap());
 
-    let key_vec = if opts.key.is_none() {
+    let mut key_vec = if opts.key.is_none() {
         println!("Warning: Using static development key.");
-        let static_key: [u8; 3] = [0x50, 0xBE, 0x17];
+        let static_key: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
         static_key.to_vec()
     } else {
         let opt_key = opts.key.unwrap();
@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<(), std::io::Error>
         });
     println!("]");
 
-    if packer::pack(opts.bin, opts.out, key_vec).is_ok() {
+    if packer::pack(opts.bin, opts.out, &mut key_vec).is_ok() {
         return Ok(());
     }
     Err(std::io::Error::last_os_error())

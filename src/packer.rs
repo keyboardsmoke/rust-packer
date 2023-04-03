@@ -24,14 +24,21 @@ fn write_file_buffer(buffer: &Vec<u8>, output_filename: PathBuf) -> anyhow::Resu
     Ok(())
 }
 
-pub fn pack(filename: PathBuf, output_filename: PathBuf, key: Vec<u8>) -> anyhow::Result<(), anyhow::Error>
+fn to_bytes(input: u32) -> anyhow::Result<Vec<u8>, anyhow::Error>
+{
+    let mut bytes = Vec::with_capacity(std::mem::size_of::<u32>());
+    bytes.extend(&input.to_be_bytes());
+    return Ok(bytes);
+}
+
+pub fn pack(filename: PathBuf, output_filename: PathBuf, key: &mut Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
     let mut buffer = Vec::new();
     get_file_buffer(filename, &mut buffer)?;
     
     // If i want to use data 'in place'
     // let (head, body, tail) = unsafe { buffer.align_to::<IMAGE_DOS_HEADER>() };
-    let mut pe = exe::pe::VecPE::from_data(exe::pe::PEType::Disk, buffer);
+    let mut pe = exe::pe::VecPE::from_disk_data(buffer);
 
     let dos = pe.get_valid_dos_header()?;
     let dos_hdr = dos.clone();
@@ -47,18 +54,25 @@ pub fn pack(filename: PathBuf, output_filename: PathBuf, key: Vec<u8>) -> anyhow
 
     println!("Size of PE before 0x{:X}", pe.calculate_disk_size().unwrap());
 
-    // Append key to the end of the binary, which should be where our section is?...
-    for i in 0..0x1000 {
-        if i < key.len() {
-            let kv = *key.index(i);
-            pe.get_mut_buffer().append([kv]);
-        } else {
-            pe.get_mut_buffer().append([0]);
-        }
-    }
+    let key_len = key.len();
 
     // Run steps
-    encryption::pack(pe.clone(), dos_hdr, nts_hdr, key)?;
+    encryption::pack(&mut pe, dos_hdr, nts_hdr, key)?;
+
+    // Append the number of bytes to the stream...
+    let key_len_bytes = to_bytes(key_len as u32)?;
+    pe.get_mut_buffer().append(key_len_bytes);
+
+    // Append key to the end of the binary, which should be where our section is?...
+    for i in 0..key_len {
+        let kv = *key.index(i);
+        pe.get_mut_buffer().append([kv]);
+    }
+
+    // Fill whatever is left
+    let remainder = 0x1000 - key.len();
+    pe.get_mut_buffer().append((0..remainder).map(|_|0).collect::<Vec<u8>>());
+
 
     let chars = SectionCharacteristics::MEM_READ | SectionCharacteristics::ALIGN_4096BYTES | SectionCharacteristics::CNT_INITIALIZED_DATA;
 

@@ -18,7 +18,14 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "--bin", 
+                "${workspaceFolder}\\target\\debug\\packer_target.exe",
+                "--out",
+                "${workspaceFolder}\\target\\debug\\packer_sec_target.exe",
+                "--key",
+                "DEADBEEF"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {

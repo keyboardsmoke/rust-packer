@@ -1,6 +1,4 @@
-use std::{borrow::BorrowMut};
-
-use exe::{ImageDOSHeader, ImageNTHeaders64};
+use exe::{ImageDOSHeader, ImageNTHeaders64, CCharString};
 
 #[path = "../shared/mem.rs"]
 mod mem;
@@ -8,33 +6,39 @@ mod mem;
 #[path = "../shared/section.rs"]
 mod section;
 
-pub fn pack(mut pe: exe::pe::VecPE, dos: ImageDOSHeader, nts: ImageNTHeaders64, key: Vec<u8>) -> anyhow::Result<(), anyhow::Error>
+pub fn pack(pe: &mut exe::pe::VecPE, dos: ImageDOSHeader, nts: ImageNTHeaders64, key: &mut Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
-    section::foreach_section_buffer(pe.borrow_mut(), dos, nts, |vpe, sec| {
+    section::foreach_section_buffer(pe, dos, nts, |vpe, sec| {
+        let sname = sec.name.as_str();
+        if sname.is_err() {
+            println!("Unable to get section name for section at {}", sec.pointer_to_raw_data.0);
+            return;
+        }
 
-        let s = sec.first().unwrap();
+        let sec_name = sname.ok().unwrap();
+        println!("Processing {}", sec_name);
 
-        let good = s.characteristics.bits() & exe::headers::SectionCharacteristics::MEM_EXECUTE.bits();
+        let good = sec.characteristics.bits() & exe::headers::SectionCharacteristics::MEM_EXECUTE.bits();
         if good != exe::headers::SectionCharacteristics::MEM_EXECUTE.bits() {
-            return false;
+            println!("Skipping section {} because it is not marked MEM_EXECUTE.", sec_name);
+            return;
         }
 
-        if s.size_of_raw_data == 0 {
-            return false;
+        if sec.size_of_raw_data == 0 {
+            println!("Skipping section {} because it's raw data is 0.", sec_name);
+            return;
         }
-    
-        let start: usize = s.pointer_to_raw_data.into();
-        let end = start + s.size_of_raw_data as usize;
 
-        for i in start .. end as usize {
-            let key_index = i - start;
-            let kv = key[key_index.rem_euclid(key.len())];
+        println!("Packing section {}", sec_name);
+
+        for i in 0 .. sec.size_of_raw_data as usize {
+            let kv = key[i.rem_euclid(key.len())];
             unsafe {
-                let base: *mut u8 = vpe.add(i);
+                let base = vpe.add(sec.pointer_to_raw_data.0 as usize + i);
                 *base = *base ^ kv;
             };
         }
-        return false;
+        println!("Packed section {}", sec_name);
     });
     Ok(())
 }
