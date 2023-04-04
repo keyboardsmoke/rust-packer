@@ -1,10 +1,6 @@
-use std::{ops::Index, collections::HashMap};
-
+use std::{ops::Index};
 use exe::{PE, Buffer};
-use once_cell::sync::Lazy;
-use winapi::um::winnt::PRUNTIME_FUNCTION;
-
-use crate::section;
+use crate::{section};
 
 #[derive(Clone)]
 #[allow(unused)]
@@ -60,8 +56,14 @@ pub struct FunctionTableCallbackData
 {
     pub base: u64,
     pub size: u64,
-    pub fns: Vec<RuntimeFunction>,
-    pub rts: Lazy<HashMap<u32, PRUNTIME_FUNCTION>>
+    pub fns: Vec<RuntimeFunction>
+}
+
+pub struct ImportEntry
+{
+    pub module_name: String,
+    pub function_name: Option<String>,
+    pub ordinal: Option<u64>
 }
 
 #[allow(unused)]
@@ -71,7 +73,11 @@ pub struct Metadata
     pub key: Vec<u8>,
 
     // 
-    pub exception_entries: Vec<RuntimeFunction>
+    pub exception_entries: Vec<RuntimeFunction>,
+
+
+    //
+    // pub import_entries: Vec<ImportEntry>
 }
 
 pub struct StreamReader
@@ -127,6 +133,63 @@ pub fn read_data(pe: &mut exe::pe::PtrPE) -> anyhow::Result<Metadata, anyhow::Er
         entries.push(entry);
     }
 
+/*
+    let mut imps: Vec<ImportEntry> = Vec::new();
+    let impres = pe.get_data_directory(exe::ImageDirectoryEntry::Import);
+    if impres.is_ok() {
+        let impdir = impres.unwrap();
+        let number_of_descriptors = impdir.size as usize / std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>();
+        
+        for i in 0..number_of_descriptors {
+            let desc = unsafe { *pe.as_mut_ptr().add(i * std::mem::size_of::<IMAGE_IMPORT_DESCRIPTOR>()).cast::<IMAGE_IMPORT_DESCRIPTOR>() };
+            let original_first = unsafe { *desc.u.OriginalFirstThunk() };
+            if desc.Name == 0 { break } // No more entries.
+            let raw_name_offset = mem::virtual_to_raw(pe, desc.Name);
+            let raw_original_first_thunk = mem::virtual_to_raw(pe, original_first);
+            if raw_name_offset.is_err() || raw_original_first_thunk.is_err() {
+                println!("Unable to locate the raw name offset or raw original thunk for import...");
+                break
+            }
+            let raw_offset_value = raw_name_offset.unwrap();
+            let module_name = exe::Offset(raw_offset_value).get_cstring(pe, false, None);
+            if module_name.is_err() {
+                println!("Unable to reference import module function name memory.");
+                break
+            }
+            let othunk = raw_original_first_thunk.unwrap();
+            let mut iat = unsafe { pe.as_mut_ptr().add(desc.FirstThunk as usize).cast::<IMAGE_THUNK_DATA64>() };
+            let mut int: *mut IMAGE_THUNK_DATA64 = 0 as *mut IMAGE_THUNK_DATA64;
+            if othunk != 0 {
+                int = unsafe { pe.as_mut_ptr().add(othunk as usize).cast::<IMAGE_THUNK_DATA64>() };
+            } else {
+                int = iat;
+            }
+
+            unsafe {
+                println!("Desc [Name: 0x{:X}][Characteristics: 0x{:X}][TimeDateStamp: 0x{:X}][FirstThunk: 0x{:X}][OriginalFirstThunk: 0x{:X}][ForwarderChain: 0x{:X}]", 
+                    raw_offset_value, *desc.u.Characteristics(), desc.TimeDateStamp, desc.FirstThunk, *desc.u.OriginalFirstThunk(), desc.ForwarderChain);
+            }
+
+            let mut i = 0;
+            let mut int_fn = unsafe { *(*int).u1.Function() };
+            loop
+            {
+                let cint = unsafe { int.add(i) };
+                let ciat = unsafe { iat.add(i) };
+
+                let rva = desc.FirstThunk + std::mem::size_of::<uintptr_t>() as u32 * i as u32;
+                println!("RVA: 0x{:X}", rva);
+
+                let ord = unsafe { *(*cint).u1.Ordinal() };
+
+                int_fn = unsafe { *(*cint).u1.Function() };
+                i += 1;
+            }
+        }
+    }
+
+    Ok(Metadata { key: key, exception_entries: entries, import_entries: imps })
+*/
     Ok(Metadata { key: key, exception_entries: entries })
 }
 

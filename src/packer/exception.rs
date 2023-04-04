@@ -9,13 +9,6 @@ pub fn pack(pe: &mut exe::pe::VecPE, _dos: ImageDOSHeader, _nts: ImageNTHeaders6
     let mut reader: shared::metadata::StreamReader = shared::metadata::StreamReader { ptr: pdata_ptr, index: 0 };
     let total = pdata.size_of_raw_data as usize / std::mem::size_of::<RUNTIME_FUNCTION>();
 
-    // Start pdata: 000000014001E000
-    // Start real entries: 000000014001F800
-    // Delta = 1800
-    // 1800 / 4 = 600
-    // 600 / 3 = 200
-    // Should be about 600 null entries...
-
     for _ in 0..total {
         let offset = reader.index;
         let begin = reader.read::<u32>();

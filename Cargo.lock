@@ -489,6 +489,7 @@ dependencies = [
  "anyhow",
  "clap",
  "exe",
+ "lazy_static",
  "once_cell",
  "rand",
  "region",
