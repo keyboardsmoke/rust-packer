@@ -17,14 +17,16 @@ extern "system" fn DllMain(dll_module: HINSTANCE, call_reason: DWORD, reserved: 
     const DLL_PROCESS_ATTACH: DWORD = 1;
 
     if call_reason == DLL_PROCESS_ATTACH {
-        println!("packer initialization called.");
+        println!("DLL_PROCESS_ATTACH");
         
         // Call initialization stuff
-        unpacker::initialize();
-
-        unsafe { 
-            OEP = (*reserved).Rip;
-            (*reserved).Rip = startup_hijack as u64; 
+        if unpacker::initialize().is_err() {
+            println!("unpacker initialization failed.");
+        } else {
+            unsafe { 
+                OEP = (*reserved).Rip;
+                (*reserved).Rip = startup_hijack as u64; 
+            }
         }
     }
     return TRUE;

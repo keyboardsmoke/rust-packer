@@ -1,11 +1,11 @@
 mod encryption;
+mod exception;
 
-#[path = "shared/mem.rs"]
-mod mem;
-
-pub fn initialize()
+pub fn initialize() -> anyhow::Result<(), anyhow::Error>
 {
-    encryption::initialize();
+    encryption::initialize()?;
+    exception::initialize()?;
+    Ok(())
 }
 
 pub fn run(base: u64, peb: u64) -> anyhow::Result<(), anyhow::Error>
@@ -19,8 +19,11 @@ pub fn run(base: u64, peb: u64) -> anyhow::Result<(), anyhow::Error>
 
     let mut pe = per.ok().ok_or(anyhow::Error::msg("Unable to open memory."))?;
 
+    let meta = shared::metadata::read_data(&mut pe)?;
+
     // Pass it.
-    encryption::run(base, &mut pe, peb)?;
-    
+    encryption::run(base, &mut pe, peb, &meta)?;
+    exception::run(base, &mut pe, peb, &meta)?;
+
     Ok(())
 }

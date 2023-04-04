@@ -1,14 +1,8 @@
 use exe::{ImageDOSHeader, ImageNTHeaders64, CCharString};
 
-#[path = "../shared/mem.rs"]
-mod mem;
-
-#[path = "../shared/section.rs"]
-mod section;
-
 pub fn pack(pe: &mut exe::pe::VecPE, dos: ImageDOSHeader, nts: ImageNTHeaders64, key: &mut Vec<u8>) -> anyhow::Result<(), anyhow::Error>
 {
-    section::foreach_section_buffer(pe, dos, nts, |vpe, sec| {
+    shared::section::foreach_section_buffer(pe, dos, nts, |vpe, sec| {
         let sname = sec.name.as_str();
         if sname.is_err() {
             println!("Unable to get section name for section at {}", sec.pointer_to_raw_data.0);
@@ -31,7 +25,7 @@ pub fn pack(pe: &mut exe::pe::VecPE, dos: ImageDOSHeader, nts: ImageNTHeaders64,
 
         println!("Packing section {}", sec_name);
 
-        for i in 0 .. sec.size_of_raw_data as usize {
+        for i in 0 as usize .. sec.size_of_raw_data as usize {
             let kv = key[i.rem_euclid(key.len())];
             unsafe {
                 let base = vpe.add(sec.pointer_to_raw_data.0 as usize + i);
