@@ -1,13 +1,8 @@
 use shared::metadata::RuntimeFunction;
 use std::{collections::HashMap, ffi::c_void, sync::{Mutex}, ops::Index};
 use exe::PE;
-use winapi::{shared::{ntdef::{PVOID}, basetsd::DWORD64}, um::{winnt::{PRUNTIME_FUNCTION, RUNTIME_FUNCTION, IMAGE_RUNTIME_FUNCTION_ENTRY_u, PGET_RUNTIME_FUNCTION_CALLBACK, IMAGE_RUNTIME_FUNCTION_ENTRY, MEM_COMMIT, PAGE_READWRITE}}};
+use winapi::{shared::{ntdef::{PVOID}, basetsd::DWORD64}, um::{winnt::{PRUNTIME_FUNCTION, RUNTIME_FUNCTION, IMAGE_RUNTIME_FUNCTION_ENTRY_u, PGET_RUNTIME_FUNCTION_CALLBACK, IMAGE_RUNTIME_FUNCTION_ENTRY, MEM_COMMIT, PAGE_READWRITE, _IMAGE_RUNTIME_FUNCTION_ENTRY}}};
 
-
-// static CALLBACK_DATA: Lazy<Mutex<shared::metadata::FunctionTableCallbackData>> = Lazy::new(|| Mutex::new(shared::metadata::FunctionTableCallbackData {base: 0, size: 0, fns: Vec::new(), rts: Lazy::new(|| HashMap::new()) }));
-// static HASH_DATA = Lazy<Mutex<shared::metadata::RuntimeFunction>> = Lazy::new(|| Mutex::new(RuntimeFunction { begin: 0, end: 0, unwind: 0, key: 0 }));
-
-// static CALLBACK_DATA: Lazy<Mutex<shared::metadata::FunctionTableCallbackData>> = Lazy::new(|| Mutex::new(shared::metadata::FunctionTableCallbackData { base: 0, size: 0, fns: Vec::new() }));
 lazy_static::lazy_static! {
     static ref HASH_DATA: Mutex<HashMap<u32, RUNTIME_FUNCTION>> = Mutex::new(HashMap::new());
 }
@@ -18,8 +13,6 @@ struct ImmutableDataContext
     size: u64,
     fns: Vec<RuntimeFunction>
 }
-
-// Lazy<HashMap<u32, PRUNTIME_FUNCTION>>
 
 unsafe extern "C" fn table_callback(controlpc: DWORD64, context: PVOID) -> PRUNTIME_FUNCTION
 {
@@ -86,12 +79,17 @@ unsafe extern "C" fn table_callback(controlpc: DWORD64, context: PVOID) -> PRUNT
     // 0 as PRUNTIME_FUNCTION
 }
 
-pub fn initialize() -> anyhow::Result<(), anyhow::Error>
+fn get_identifier(base: u64) -> u64
+{
+    return base | 0x03;
+}
+
+pub fn attach(_base: u64, _pe: &mut exe::pe::PtrPE) -> anyhow::Result<(), anyhow::Error>
 {
     Ok(())
 }
 
-pub fn run(_base: u64, pe: &mut exe::pe::PtrPE, _peb: u64, metadata: &shared::metadata::Metadata) -> anyhow::Result<(), anyhow::Error>
+pub fn entry(_base: u64, pe: &mut exe::pe::PtrPE, _peb: u64, metadata: &shared::metadata::Metadata) -> anyhow::Result<(), anyhow::Error>
 {
     let img = pe.get_image_base()?;
     let msize = pe.calculate_memory_size()?;
@@ -105,17 +103,32 @@ pub fn run(_base: u64, pe: &mut exe::pe::PtrPE, _peb: u64, metadata: &shared::me
 
     // These won't ever get updated unlike the hash table.
     unsafe {
+        // That I still can't do this safely bothers me deeply
+        // Still, though, at this stage in the process we don't have to worry much about thread safety
         (*imm).base = img;
         (*imm).size = msize as u64;
         (*imm).fns = metadata.exception_entries.clone();
     }
 
     let cb: PGET_RUNTIME_FUNCTION_CALLBACK = Some(table_callback);
-    let res = unsafe { winapi::um::winnt::RtlInstallFunctionTableCallback(img | 0x03, img, msize as u32, cb, imm_alloc, 0 as *const u16) };
+    let res = unsafe { winapi::um::winnt::RtlInstallFunctionTableCallback(get_identifier(img), img, msize as u32, cb, imm_alloc, 0 as *const u16) };
     if res == 0 {
         println!("Failed to install function table callback with offset 0x{:X} and size 0x{:X} (end: 0x{:X})", img, msize, img + msize as u64);   
     } else {
         println!("Installed function table callback at offset 0x{:X} and size 0x{:X} (end: 0x{:X})", img, msize, img + msize as u64);
     }
+    Ok(())
+}
+
+pub fn call(_base: u64, _pe: &mut exe::pe::PtrPE) -> anyhow::Result<(), anyhow::Error>
+{
+    Ok(())
+}
+
+pub fn detach(_base: u64, pe: &mut exe::pe::PtrPE) -> anyhow::Result<(), anyhow::Error>
+{
+    let img = pe.get_image_base()?;
+    // A pointer to an array of function entries that were previously passed to RtlAddFunctionTable or an identifier previously passed to RtlInstallFunctionTableCallback. For a definition of the PRUNTIME_FUNCTION type, see WinNT.h.
+    unsafe { winapi::um::winnt::RtlDeleteFunctionTable(get_identifier(img) as *mut _IMAGE_RUNTIME_FUNCTION_ENTRY) };
     Ok(())
 }

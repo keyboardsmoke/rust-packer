@@ -1,12 +1,11 @@
 use exe::{PE, CCharString};
 
-pub fn initialize() -> anyhow::Result<(), anyhow::Error>
+pub fn attach(_base: u64, _pe: &mut exe::pe::PtrPE) -> anyhow::Result<(), anyhow::Error>
 {
-    // todo!("Nothing here yet.");
     Ok(())
 }
 
-pub fn run(_base: u64, pe: &mut exe::pe::PtrPE, _peb: u64, metadata: &shared::metadata::Metadata) -> anyhow::Result<(), anyhow::Error>
+pub fn entry(_base: u64, pe: &mut exe::pe::PtrPE, _peb: u64, metadata: &shared::metadata::Metadata) -> anyhow::Result<(), anyhow::Error>
 {
     let key = metadata.key.clone();
 
@@ -65,5 +64,15 @@ pub fn run(_base: u64, pe: &mut exe::pe::PtrPE, _peb: u64, metadata: &shared::me
             return;
         }
     });
+    Ok(())
+}
+
+pub fn call(_base: u64, _pe: &mut exe::pe::PtrPE) -> anyhow::Result<(), anyhow::Error>
+{
+    Ok(())
+}
+
+pub fn detach(_base: u64, _pe: &mut exe::pe::PtrPE) -> anyhow::Result<(), anyhow::Error>
+{
     Ok(())
 }
